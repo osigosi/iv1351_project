@@ -1,7 +1,4 @@
-+60
-Lines changed: 60 additions & 0 deletions
-Original file line number	Diff line number	Diff line change
-@@ -1 +1,61 @@
+
 SELECT
     c.course_code,
     ci.instance_id,
