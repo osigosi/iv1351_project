@@ -1,4 +1,51 @@
-query 2 
+
+--QUERY 1  NOTHING CHANGED
+SELECT 
+    c.course_code,
+    CONCAT(ci.study_year, '-', ci.instance_id) AS course_instance_id,
+    cl.hp,
+    ci.study_period,
+    ci.num_students,
+
+    -- Planned hours per activity
+    SUM(CASE WHEN ta.activity_name = 'Lecture' THEN pa.planned_hours * ta.factor ELSE 0 END) AS lecture_hours,
+    SUM(CASE WHEN ta.activity_name = 'Tutorial' THEN pa.planned_hours * ta.factor ELSE 0 END) AS tutorial_hours,
+    SUM(CASE WHEN ta.activity_name = 'Lab' THEN pa.planned_hours * ta.factor ELSE 0 END) AS lab_hours,
+    SUM(CASE WHEN ta.activity_name = 'Seminar' THEN pa.planned_hours * ta.factor ELSE 0 END) AS seminar_hours
+ 
+
+    -- Calculated hours
+    ROUND(2 * cl.hp + 28 + 0.2 * ci.num_students, 2) AS admin_hours,
+    ROUND(32 + 0.725 * ci.num_students, 2) AS exam_hours,
+
+    -- Total Hours
+    ROUND(
+        SUM(pa.planned_hours * ta.factor)
+        + (2 * cl.hp + 28 + 0.2 * ci.num_students)
+        + (32 + 0.725 * ci.num_students),
+        2
+    ) AS total_hours
+
+FROM 
+    course_instance ci
+JOIN 
+    course_layout cl ON ci.layout_id = cl.layout_id
+JOIN 
+    course c ON cl.course_id = c.course_id
+LEFT JOIN 
+    planned_activity pa ON pa.instance_id = ci.instance_id
+LEFT JOIN 
+    teaching_activity ta ON pa.activity_id = ta.activity_id
+
+WHERE 
+    ci.study_year = EXTRACT(YEAR FROM CURRENT_DATE)
+
+GROUP BY 
+    c.course_code, ci.instance_id, cl.hp, ci.study_period, ci.num_students
+ORDER BY 
+
+
+--QUERY 2 CHANGED HOW WE CALCULATE TEACHAR ADMIN AND EXAM HOURS
 	SELECT 
     c.course_code,
     CONCAT(ci.study_year, '-', ci.instance_id) AS course_instance_id,
@@ -9,21 +56,20 @@ query 2
     CONCAT(p.first_name, ' ', p.last_name) AS teacher_name,
     jt.job_title AS designation,
 
-    -- Allokerade timmar per aktivitet (weighted)
+    -- Allocated Hours per teacher
     SUM(CASE WHEN ta.activity_name = 'Lecture' THEN a.allocated_hours * ta.factor ELSE 0 END) AS lecture_hours,
     SUM(CASE WHEN ta.activity_name = 'Tutorial' THEN a.allocated_hours * ta.factor ELSE 0 END) AS tutorial_hours,
     SUM(CASE WHEN ta.activity_name = 'Lab' THEN a.allocated_hours * ta.factor ELSE 0 END) AS lab_hours,
-    SUM(CASE WHEN ta.activity_name = 'Seminar' THEN a.allocated_hours * ta.factor ELSE 0 END) AS seminar_hours,
-    SUM(CASE WHEN ta.activity_name = 'Other Overhead' THEN a.allocated_hours * ta.factor ELSE 0 END) AS other_overhead_hours,
+    SUM(CASE WHEN ta.activity_name = 'Seminar' THEN a.allocated_hours * ta.factor ELSE 0 END) AS seminar_hours
 
-    -- Lärarens total
+    -- Teacher Total
     SUM(a.allocated_hours * ta.factor) AS teacher_alloc_hours,
 
-    -- Admin/exam lika fördelat per lärare i instansen
+    -- THIS IS CHAMGED, previous we calculated the total admin hours for each teacher, we changed this to equally dividing the hours between the teachers.
     ROUND((2 * cl.hp + 28 + 0.2 * ci.num_students) / NULLIF(tc.teacher_count, 0), 2) AS admin_hours,
     ROUND((32 + 0.725 * ci.num_students) / NULLIF(tc.teacher_count, 0), 2) AS exam_hours,
 
-    -- Total per lärare
+    -- Total hours
     ROUND(
         SUM(a.allocated_hours * ta.factor)
         + (2 * cl.hp + 28 + 0.2 * ci.num_students) / NULLIF(tc.teacher_count, 0)
@@ -46,7 +92,7 @@ JOIN person p
   ON p.person_id = e.person_id
 JOIN job_title jt
   ON jt.job_id = e.job_id
-
+	-- NEW, Counts the total allocations a teacher haves.
 JOIN (
     SELECT instance_id, COUNT(DISTINCT worker_id) AS teacher_count
     FROM allocation
@@ -62,7 +108,7 @@ GROUP BY
     c.course_code, ci.instance_id, cl.hp, ci.study_period, ci.study_year, ci.num_students,
     teacher_name, jt.job_title, tc.teacher_count
 
--- Query 3: total allocated hours (with factor) for ONE teacher, current year
+-- Query 3: CHANGED HOW WE CALCULATE TEACHAR ADMIN AND EXAM HOURS
 SELECT 
     c.course_code,
     CONCAT(ci.study_year, '-', ci.instance_id) AS course_instance_id,
@@ -70,14 +116,14 @@ SELECT
     ci.study_period,
     CONCAT(p.first_name, ' ', p.last_name) AS teacher_name,
 
-    -- allocated hours per activity (weighted)
+    -- allocated hours per activity 
     SUM(CASE WHEN ta.activity_name = 'Lecture' THEN a.allocated_hours * ta.factor ELSE 0 END) AS lecture_hours,
     SUM(CASE WHEN ta.activity_name = 'Tutorial' THEN a.allocated_hours * ta.factor ELSE 0 END) AS tutorial_hours,
     SUM(CASE WHEN ta.activity_name = 'Lab' THEN a.allocated_hours * ta.factor ELSE 0 END) AS lab_hours,
     SUM(CASE WHEN ta.activity_name = 'Seminar' THEN a.allocated_hours * ta.factor ELSE 0 END) AS seminar_hours,
-    SUM(CASE WHEN ta.activity_name = 'Other Overhead' THEN a.allocated_hours * ta.factor ELSE 0 END) AS other_overhead_hours,
+ 
 
-    -- overhead (equal split across teachers in the instance)
+ -- THIS IS CHAMGED, previous we calculated the total admin hours for each teacher, we changed this to equally dividing the hours between the teachers.
     ROUND((2 * cl.hp + 28 + 0.2 * ci.num_students) / NULLIF(tc.teacher_count, 0), 2) AS admin_hours,
     ROUND((32 + 0.725 * ci.num_students) / NULLIF(tc.teacher_count, 0), 2) AS exam_hours,
 
@@ -103,7 +149,7 @@ JOIN employee e
 JOIN person p
   ON p.person_id = e.person_id
 
--- number of teachers per instance (for equal overhead split)
+-- NEW number of teachers per instance 
 JOIN (
     SELECT instance_id, COUNT(DISTINCT worker_id) AS teacher_count
     FROM allocation
@@ -112,9 +158,9 @@ JOIN (
   ON tc.instance_id = a.instance_id
 
 WHERE 
-    ci.study_year = EXTRACT(YEAR FROM CURRENT_DATE)
-    AND p.first_name = 'Alice'
-    AND p.last_name  = 'Smith'
+    ci.study_year = 2025
+    AND p.first_name = 'Niharika'
+    AND p.last_name  = 'Gauraha'
 
 GROUP BY 
     c.course_code, ci.study_year, ci.instance_id, cl.hp, ci.study_period,
@@ -123,8 +169,7 @@ GROUP BY
 ORDER BY 
     ci.study_period, c.course_code;
 
-
-
+-- Query 4 NOTHING CHANGED
 SELECT 
     e.employment_id,
     CONCAT(p.first_name, ' ', p.last_name) AS teacher_name,
@@ -149,93 +194,3 @@ ORDER BY
     no_of_courses DESC;
 
 
-BEFORE TESRING
-"Sort  (cost=9.12..9.15 rows=13 width=55) (actual time=0.440..0.443 rows=5.00 loops=1)"
-"  Sort Key: (count(DISTINCT a.instance_id)) DESC"
-"  Sort Method: quicksort  Memory: 25kB"
-"  Buffers: shared hit=4"
-"  ->  GroupAggregate  (cost=7.88..8.88 rows=13 width=55) (actual time=0.418..0.434 rows=5.00 loops=1)"
-"        Group Key: e.employment_id, (concat(TRIM(BOTH FROM p.first_name), ' ', p.last_name))"
-"        Filter: (count(DISTINCT a.instance_id) > 1)"
-"        Buffers: shared hit=4"
-"        ->  Sort  (cost=7.88..7.98 rows=40 width=51) (actual time=0.407..0.412 rows=40.00 loops=1)"
-"              Sort Key: e.employment_id, (concat(TRIM(BOTH FROM p.first_name), ' ', p.last_name)), a.instance_id"
-"              Sort Method: quicksort  Memory: 27kB"
-"              Buffers: shared hit=4"
-"              ->  Hash Join  (cost=4.03..6.82 rows=40 width=51) (actual time=0.176..0.306 rows=40.00 loops=1)"
-"                    Hash Cond: (e.person_id = p.person_id)"
-"                    Buffers: shared hit=4"
-"                    ->  Hash Join  (cost=2.56..4.92 rows=40 width=23) (actual time=0.107..0.161 rows=40.00 loops=1)"
-"                          Hash Cond: (a.worker_id = e.worker_id)"
-"                          Buffers: shared hit=3"
-"                          ->  Hash Join  (cost=1.08..3.32 rows=40 width=12) (actual time=0.068..0.103 rows=40.00 loops=1)"
-"                                Hash Cond: (a.instance_id = ci.instance_id)"
-"                                Buffers: shared hit=2"
-"                                ->  Seq Scan on allocation a  (cost=0.00..1.80 rows=80 width=8) (actual time=0.023..0.031 rows=80.00 loops=1)"
-"                                      Buffers: shared hit=1"
-"                                ->  Hash  (cost=1.06..1.06 rows=2 width=8) (actual time=0.033..0.033 rows=2.00 loops=1)"
-"                                      Buckets: 1024  Batches: 1  Memory Usage: 9kB"
-"                                      Buffers: shared hit=1"
-"                                      ->  Seq Scan on course_instance ci  (cost=0.00..1.06 rows=2 width=8) (actual time=0.029..0.031 rows=2.00 loops=1)"
-"                                            Filter: ((study_year = 2025) AND (study_period = 'P2'::study_period_enum))"
-"                                            Rows Removed by Filter: 2"
-"                                            Buffers: shared hit=1"
-"                          ->  Hash  (cost=1.21..1.21 rows=21 width=19) (actual time=0.028..0.029 rows=21.00 loops=1)"
-"                                Buckets: 1024  Batches: 1  Memory Usage: 10kB"
-"                                Buffers: shared hit=1"
-"                                ->  Seq Scan on employee e  (cost=0.00..1.21 rows=21 width=19) (actual time=0.012..0.017 rows=21.00 loops=1)"
-"                                      Buffers: shared hit=1"
-"                    ->  Hash  (cost=1.21..1.21 rows=21 width=61) (actual time=0.043..0.044 rows=21.00 loops=1)"
-"                          Buckets: 1024  Batches: 1  Memory Usage: 10kB"
-"                          Buffers: shared hit=1"
-"                          ->  Seq Scan on person p  (cost=0.00..1.21 rows=21 width=61) (actual time=0.027..0.032 rows=21.00 loops=1)"
-"                                Buffers: shared hit=1"
-"Planning:"
-"  Buffers: shared hit=30"
-"Planning Time: 3.936 ms"
-"Execution Time: 0.648 ms"
-After INDEX
-"Sort  (cost=9.12..9.15 rows=13 width=55) (actual time=0.264..0.267 rows=5.00 loops=1)"
-"  Sort Key: (count(DISTINCT a.instance_id)) DESC"
-"  Sort Method: quicksort  Memory: 25kB"
-"  Buffers: shared hit=4"
-"  ->  GroupAggregate  (cost=7.88..8.88 rows=13 width=55) (actual time=0.249..0.258 rows=5.00 loops=1)"
-"        Group Key: e.employment_id, (concat(TRIM(BOTH FROM p.first_name), ' ', p.last_name))"
-"        Filter: (count(DISTINCT a.instance_id) > 1)"
-"        Buffers: shared hit=4"
-"        ->  Sort  (cost=7.88..7.98 rows=40 width=51) (actual time=0.240..0.244 rows=40.00 loops=1)"
-"              Sort Key: e.employment_id, (concat(TRIM(BOTH FROM p.first_name), ' ', p.last_name)), a.instance_id"
-"              Sort Method: quicksort  Memory: 27kB"
-"              Buffers: shared hit=4"
-"              ->  Hash Join  (cost=4.03..6.82 rows=40 width=51) (actual time=0.128..0.178 rows=40.00 loops=1)"
-"                    Hash Cond: (e.person_id = p.person_id)"
-"                    Buffers: shared hit=4"
-"                    ->  Hash Join  (cost=2.56..4.92 rows=40 width=23) (actual time=0.066..0.088 rows=40.00 loops=1)"
-"                          Hash Cond: (a.worker_id = e.worker_id)"
-"                          Buffers: shared hit=3"
-"                          ->  Hash Join  (cost=1.08..3.32 rows=40 width=12) (actual time=0.041..0.056 rows=40.00 loops=1)"
-"                                Hash Cond: (a.instance_id = ci.instance_id)"
-"                                Buffers: shared hit=2"
-"                                ->  Seq Scan on allocation a  (cost=0.00..1.80 rows=80 width=8) (actual time=0.015..0.019 rows=80.00 loops=1)"
-"                                      Buffers: shared hit=1"
-"                                ->  Hash  (cost=1.06..1.06 rows=2 width=8) (actual time=0.015..0.016 rows=2.00 loops=1)"
-"                                      Buckets: 1024  Batches: 1  Memory Usage: 9kB"
-"                                      Buffers: shared hit=1"
-"                                      ->  Seq Scan on course_instance ci  (cost=0.00..1.06 rows=2 width=8) (actual time=0.010..0.011 rows=2.00 loops=1)"
-"                                            Filter: ((study_year = 2025) AND (study_period = 'P2'::study_period_enum))"
-"                                            Rows Removed by Filter: 2"
-"                                            Buffers: shared hit=1"
-"                          ->  Hash  (cost=1.21..1.21 rows=21 width=19) (actual time=0.017..0.017 rows=21.00 loops=1)"
-"                                Buckets: 1024  Batches: 1  Memory Usage: 10kB"
-"                                Buffers: shared hit=1"
-"                                ->  Seq Scan on employee e  (cost=0.00..1.21 rows=21 width=19) (actual time=0.006..0.009 rows=21.00 loops=1)"
-"                                      Buffers: shared hit=1"
-"                    ->  Hash  (cost=1.21..1.21 rows=21 width=61) (actual time=0.043..0.043 rows=21.00 loops=1)"
-"                          Buckets: 1024  Batches: 1  Memory Usage: 10kB"
-"                          Buffers: shared hit=1"
-"                          ->  Seq Scan on person p  (cost=0.00..1.21 rows=21 width=61) (actual time=0.025..0.032 rows=21.00 loops=1)"
-"                                Buffers: shared hit=1"
-"Planning:"
-"  Buffers: shared hit=14"
-"Planning Time: 0.613 ms"
-"Execution Time: 0.365 ms"
