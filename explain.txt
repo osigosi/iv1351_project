@@ -1,1 +1,55 @@
+"Sort  (cost=9.12..9.15 rows=13 width=55) (actual time=0.462..0.466 rows=5.00 loops=1)"
+"  Sort Key: (count(DISTINCT a.instance_id)) DESC"
+"  Sort Method: quicksort  Memory: 25kB"
+"  Buffers: shared hit=4"
+"  ->  GroupAggregate  (cost=7.88..8.88 rows=13 width=55) (actual time=0.439..0.456 rows=5.00 loops=1)"
+"        Group Key: e.employment_id, (concat(TRIM(BOTH FROM p.first_name), ' ', p.last_name))"
+"        Filter: (count(DISTINCT a.instance_id) > 1)"
+"        Buffers: shared hit=4"
+"        ->  Sort  (cost=7.88..7.98 rows=40 width=51) (actual time=0.415..0.420 rows=40.00 loops=1)"
+"              Sort Key: e.employment_id, (concat(TRIM(BOTH FROM p.first_name), ' ', p.last_name)), a.instance_id"
+"              Sort Method: quicksort  Memory: 27kB"
+"              Buffers: shared hit=4"
+"              ->  Hash Join  (cost=4.03..6.82 rows=40 width=51) (actual time=0.168..0.299 rows=40.00 loops=1)"
+"                    Hash Cond: (e.person_id = p.person_id)"
+"                    Buffers: shared hit=4"
+"                    ->  Hash Join  (cost=2.56..4.92 rows=40 width=23) (actual time=0.099..0.155 rows=40.00 loops=1)"
+"                          Hash Cond: (a.worker_id = e.worker_id)"
+"                          Buffers: shared hit=3"
+"                          ->  Hash Join  (cost=1.08..3.32 rows=40 width=12) (actual time=0.053..0.092 rows=40.00 loops=1)"
+"                                Hash Cond: (a.instance_id = ci.instance_id)"
+"                                Buffers: shared hit=2"
+"                                ->  Seq Scan on allocation a  (cost=0.00..1.80 rows=80 width=8) (actual time=0.021..0.029 rows=80.00 loops=1)"
+"                                      Buffers: shared hit=1"
+"                                ->  Hash  (cost=1.06..1.06 rows=2 width=8) (actual time=0.019..0.019 rows=2.00 loops=1)"
+"                                      Buckets: 1024  Batches: 1  Memory Usage: 9kB"
+"                                      Buffers: shared hit=1"
+"                                      ->  Seq Scan on course_instance ci  (cost=0.00..1.06 rows=2 width=8) (actual time=0.013..0.014 rows=2.00 loops=1)"
+"                                            Filter: ((study_year = 2025) AND (study_period = 'P2'::study_period_enum))"
+"                                            Rows Removed by Filter: 2"
+"                                            Buffers: shared hit=1"
+"                          ->  Hash  (cost=1.21..1.21 rows=21 width=19) (actual time=0.029..0.029 rows=21.00 loops=1)"
+"                                Buckets: 1024  Batches: 1  Memory Usage: 10kB"
+"                                Buffers: shared hit=1"
+"                                ->  Seq Scan on employee e  (cost=0.00..1.21 rows=21 width=19) (actual time=0.013..0.017 rows=21.00 loops=1)"
+"                                      Buffers: shared hit=1"
+"                    ->  Hash  (cost=1.21..1.21 rows=21 width=61) (actual time=0.048..0.048 rows=21.00 loops=1)"
+"                          Buckets: 1024  Batches: 1  Memory Usage: 10kB"
+"                          Buffers: shared hit=1"
+"                          ->  Seq Scan on person p  (cost=0.00..1.21 rows=21 width=61) (actual time=0.029..0.034 rows=21.00 loops=1)"
+"                                Buffers: shared hit=1"
+"Planning:"
+"  Buffers: shared hit=14"
+"Planning Time: 0.904 ms"
+"Execution Time: 0.594 ms"
+-- Workload 5 & 3 & 2: filtrering på year/period + join på instance_id
+CREATE INDEX IF NOT EXISTS idx_ci_year_period_instance
+ON course_instance (study_year, study_period, instance_id);
 
+-- Workload 5: join + group per worker
+CREATE INDEX IF NOT EXISTS idx_alloc_instance_worker
+ON allocation (instance_id, worker_id);
+
+-- Workload 1: planned per instance
+CREATE INDEX IF NOT EXISTS idx_pa_instance
+ON planned_activity (instance_id);
