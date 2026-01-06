@@ -6,6 +6,10 @@
 -- PostgreSQL database dump
 --
 
+--
+-- PostgreSQL database dump
+--
+
 \restrict hplA5dfDrdcy7afwSL5MNOaw7Y7PpYIvisYn1g1ry0Iu21b3bj8p2YXfWxGHLmI
 
 -- Dumped from database version 18.0
@@ -338,11 +342,13 @@ INSERT INTO public.salary (start_date, worker_id, salary) VALUES ('2025-01-01', 
 INSERT INTO public.salary (start_date, worker_id, salary) VALUES ('2025-01-01', 6, 28000);
 
 
+
 --
 -- TOC entry 5155 (class 0 OID 0)
 -- Dependencies: 219
 -- Name: course_course_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
+
 
 SELECT pg_catalog.setval('public.course_course_id_seq', 21, true);
 
@@ -424,6 +430,8 @@ SELECT pg_catalog.setval('public.teaching_activity_activity_id_seq', 4, true);
 --
 -- PostgreSQL database dump complete
 --
+
+\unrestrict hplA5dfDrdcy7afwSL5MNOaw7Y7PpYIvisYn1g1ry0Iu21b3bj8p2YXfWxGHLmI
 
 \unrestrict hplA5dfDrdcy7afwSL5MNOaw7Y7PpYIvisYn1g1ry0Iu21b3bj8p2YXfWxGHLmI
 
